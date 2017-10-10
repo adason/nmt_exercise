@@ -1,9 +1,13 @@
 """ Implement Log-linear Model in Chapter 4.
 """
 import collections
-import time
 
 import numpy as np
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+
+
+MAX_NUM_VOCAB = 4000
 
 
 def build_vocab(data_file):
@@ -11,6 +15,9 @@ def build_vocab(data_file):
     """
     counter = collections.Counter(read_text_words(data_file))
     ordered_pairs = sorted(counter.items(), key=lambda x: (x[1], x[0]), reverse=True)
+    if len(ordered_pairs) > MAX_NUM_VOCAB:
+        ordered_pairs = ordered_pairs[:MAX_NUM_VOCAB]
+
     words = [word for word, _ in ordered_pairs]
 
     return dict(zip(words, range(len(words))))
@@ -64,13 +71,12 @@ def split_toksents(toksents):
     return x, y
 
 
-def binarize(y):
+def binarize(y, n_vocab):
     """ Convert multi-class y labels into one-hot encoded vectors.
     """
     y = np.array(y)
-    n_cols = np.unique(y).shape[0]
-    n_rows = y.shape[0]
-    bin_matrix = np.zeros((n_rows, n_cols))
+    n_samples = y.shape[0]
+    bin_matrix = np.zeros((n_samples, n_vocab))
     for i, idx in enumerate(y):
         bin_matrix[i, idx] = 1
 
@@ -103,7 +109,8 @@ def log_loss(y, p, eps=1e-15):
         K: number of labels
         loss = \sum_{i=0}^{N-1}\sum_{k=0}^{K-1} y_ik * log (p_ik)
     """
-    y = binarize(y)
+    n_vocab = p.shape[1]
+    y = binarize(y, n_vocab)
     # Log loss is undefined for p=0 or p=1,
     # so probabilities are clipped to (eps, 1-eps).
     p = np.clip(p, eps, 1 - eps)
@@ -124,14 +131,20 @@ class LogLinearModel:
         if random_state:
             np.random.seed(random_state)
 
-        self.w = np.random.random_sample((n_grams), n_vocab, n_vocab)
+        self.n_grams = n_grams
+        self.n_vocab = n_vocab
+
+        self.w = np.random.random_sample((n_grams, n_vocab, n_vocab))
         self.b = np.random.random_sample((n_vocab,))
 
-    def fit(x, y, epochs=10, batch_size=32):
+    def __repr__(self):
+        return "w: {}\n b: {}".format(self.w, self.b)
+
+    def fit(self, x, y, epochs=10, batch_size=32):
         """ Fit the parameters.
         """
         loss_history = [np.Inf]
-        for e in epochs:
+        for e in range(epochs):
             print("Training epoch {}".format(e))
             loss = self._fit_one_epoch(x, y, batch_size)
             loss_history.append(loss)
@@ -142,26 +155,63 @@ class LogLinearModel:
 
         return loss_history
 
-    def _fit_one_epoch(x, y, batch_size, eta=0.1):
+    def predict(self, x):
+        """ Predict using the highest probability.
+        """
+        p = self.predict_proba(x)
+
+        return np.argmax(p, axis=1)
+
+    def predict_proba(self, x):
+        """ Predict the probability.
+        """
+        s = self.linear_trans(x, self.w, self.b)
+        p = softmax(s, axis=1)
+
+        return p
+
+    def _fit_one_epoch(self, x, y, batch_size, eta=0.1):
         """ Fit one epoch.
         """
-        y_onehot = binarize(y)
+        y_onehot = binarize(y, self.n_vocab)
 
         losses = []
         shuffled_idx = np.random.permutation(x.shape[0])
         split_idx = [batch_size*(i+1) for i in range(int(x.shape[0] / batch_size))]
-        for batch_idx in np.split(shuffled_idx, split_idx):
+        for batch_idx in tqdm(np.split(shuffled_idx, split_idx)):
             x_bat = np.take(x, batch_idx, axis=0)
             y_bat = np.take(y, batch_idx, axis=0)
             y_onehot_bat = np.take(y_onehot, batch_idx, axis=0)
-            p = softmax(linear_trans(x_bat, self.w, self.b), axis=1)
-            self.b -= eta * np.mean(p - y_onehot_bat, axis=0)
-            # self.w -= eta * x_bat * (p - y_onehot_bat) 
+            p = softmax(self.linear_trans(x_bat, self.w, self.b), axis=1)
+            p_m_onehot_et = p - y_onehot_bat
+            self.b -= eta * np.mean(p_m_onehot_et, axis=0)
+            self.w -= eta * self._grad_w(x_bat, p_m_onehot_et)
 
-            loss_bat = total_loss(x_bat, y_bat, self.w, self.b)
-            loss.append(loss_bat)
+            loss_bat = self.total_loss(x_bat, y_bat, self.w, self.b)
+            losses.append(loss_bat)
 
         return np.sum(losses)
+
+    @staticmethod
+    def _grad_w(x_bat, p_m_onehot_et):
+        """ Compute the gradient of w within a minibatch.
+
+            x_bat: shape (n_samples, n_grams)
+            p_m_onehot_et: shape (n_samples, n_vocab)
+
+            dloss/dw_j = x_j(p - onehot(e_t))
+        """
+        n_samples = x_bat.shape[0]
+        n_grams = x_bat.shape[1]
+        n_vocab = p_m_onehot_et.shape[1]
+        gw = np.zeros((n_samples, n_grams, n_vocab, n_vocab))
+        for i in range(x_bat.shape[0]):
+            x_bat_ = x_bat[i, :]  # (n_grams,)
+            for idx, j in enumerate(x_bat_):
+                gw[i, idx, :, j] = p_m_onehot_et[i, j]
+
+        return np.mean(gw, axis=0)
+
 
     @staticmethod
     def linear_trans(x, w, b):
@@ -204,37 +254,26 @@ def main():
     train_toksents = [tokenize(sent, vocab) for sent in read_text_sents(train_file)]
     test_toksents = [tokenize(sent, vocab) for sent in read_text_sents(test_file)]
 
-    # print(train_toksents[:5])
-    # print(test_toksents[:5])
+    # Some limiting Parameters
+    n_grams = 2
+    max_num_sents = 1000
+    train_data = []
+    for sent in train_toksents[:max_num_sents]:
+        train_data.extend(slide_window(sent, n_grams+1))
 
-    # print(train_toksents[0])
-    # print(list(slide_window(train_toksents[0], 3)))
+    x, y = split_toksents(train_data)
+    print("Total number of training samples: ", x.shape[0])
 
-    # x, y = binarize_toksents([[0, 1, 2],[2, 1, 0],[0, 2, 1]], 3)
-    # print(x.toarray())
-    # print(y.toarray())
+    model = LogLinearModel(n_grams, n_vocab)
+    model.fit(x, y, 5)
 
-    # x, y = split_toksents([[0, 1, 2],[2, 1, 0],[0, 2, 1]])
-    # print(x, y)
-    # print(softmax([1,2,3]))
-    #
-    # w = np.array([
-    #     [[0.2, 0.6, 0.3],
-    #      [0.5, 0.1, 0.4],
-    #      [0.3, 0.3, 0.3]],
-    #     [[0.1, 0.6, 0.4],
-    #      [0.6, 0.1, 0.4],
-    #      [0.3, 0.3, 0.2]]
-    # ])
-    # b = np.array([0.1, 0.1, 0.1])
-    # print(LogLinearModel.linear_trans(x, w, b))
-    # print(LogLinearModel.total_loss(x, y, w, b))
+    test_data = []
+    for sent in test_toksents[:max_num_sents]:
+        test_data.extend(slide_window(sent, n_grams+1))
 
-
-    # y = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-    # p = np.array([[0.9, 0.1, 0.2], [0.3, 0.6, 0.2], [0.5, 0.4, 0.8]])
-    # print(log_loss(y, p))
-
+    x_test, y_test = split_toksents(test_data)
+    y_pred = model.predict(x_test)
+    print(accuracy_score(y_test, y_pred))
 
 if __name__ == "__main__":
     main()
