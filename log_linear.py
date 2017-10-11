@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 
-from utils.data import build_vocab, tokenize, read_text_sents, slide_window, split_toksents
+from utils.data import prepare_data
 from utils.trans import binarize, softmax
 
 
@@ -282,32 +282,15 @@ def main():
     max_num_sents = 1000
     max_num_voacb = 4000
 
-    prefix = "data/iwslt/en-de/"
-    train_file = prefix + "train.en-de.tok.filt.en"
-    test_file = prefix + "test.en-de.tok.en"
-
-    vocab = build_vocab(train_file, max_num_voacb)
+    vocab, x, y, x_test, y_test = prepare_data(n_grams, max_num_sents, max_num_voacb)
     n_vocab = len(vocab.keys()) + 1 # The extra space reserved for unknown word.
-    train_toksents = [tokenize(sent, vocab) for sent in read_text_sents(train_file)]
-    test_toksents = [tokenize(sent, vocab) for sent in read_text_sents(test_file)]
-
-    train_data = []
-    for sent in train_toksents[:max_num_sents]:
-        train_data.extend(slide_window(sent, n_grams+1))
-
-    x, y = split_toksents(train_data)
-    print("Total number of training samples: ", x.shape[0])
 
     model = LogLinearModel(n_grams, n_vocab)
     model.fit(x, y, 5)
 
-    test_data = []
-    for sent in test_toksents[:max_num_sents]:
-        test_data.extend(slide_window(sent, n_grams+1))
-
-    x_test, y_test = split_toksents(test_data)
     y_pred = model.predict(x_test)
     print(accuracy_score(y_test, y_pred))
+
 
 if __name__ == "__main__":
     main()

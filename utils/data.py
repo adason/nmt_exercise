@@ -1,25 +1,29 @@
 """ Common Data Loading methods for Languag Models.
 """
 import collections
+import sys
 
 import numpy as np
 
 
-def build_vocab(filename, limit=100):
+def build_vocab(filename, limit=None):
     """ Build a vocabulary from the corpus.
 
     Parameters
     ----------
     filename : str
         Filename of the input data
-    limit : int
-        Limit the number of words in the vocabulary.
+    limit : int, optional
+        Limit the number of words in the vocabulary. Default value is None (no limit)
 
     Returns
     -------
     dict
         Python dictionary of {<word>: <index>} pairs.
     """
+    if limit is None:
+        limit = sys.maxsize
+
     counter = collections.Counter(read_text_words(filename))
     ordered_pairs = sorted(counter.items(), key=lambda x: (x[1], x[0]), reverse=True)
     if len(ordered_pairs) > limit:
@@ -143,3 +147,57 @@ def split_toksents(toksents):
     y = arr[:, -1]
 
     return x, y
+
+
+def prepare_data(n_grams, max_num_sents=None, max_num_voacb=None):
+    """ Prepare trainig & testing data for language models.
+
+    Parameters
+    ----------
+    n_grams : int
+        Number of previous words (n-grams) in a sliding window.
+    max_num_sents : int, optional
+        Maximum number of sentences to read. Default to None (no limit).
+    max_num_voacb : int, optional
+        Maximum number of words to use in vocabulary. Default to None (no limit).
+
+    Returns
+    -------
+    vocab : dict
+        Python dictionary of {<word>: <index>} pairs.
+    x : numpy array of shape (n_train_samples, n_grams)
+        Training Features
+    y : numpy array of shape (n_train_samples,)
+        Trainig Labels
+    x_test : numpy array of shape (n_test_samples, n_grams)
+        Testing Features
+    y_test : numpy array of shape (n_test_samples,)
+        Testing Labels
+    """
+    prefix = "data/iwslt/en-de/"
+    train_file = prefix + "train.en-de.tok.filt.en"
+    test_file = prefix + "test.en-de.tok.en"
+
+    vocab = build_vocab(train_file, max_num_voacb)
+    train_toksents = [tokenize(sent, vocab) for sent in read_text_sents(train_file)]
+    test_toksents = [tokenize(sent, vocab) for sent in read_text_sents(test_file)]
+
+    if max_num_sents is None:
+        train_max_num_sents = len(train_toksents) + 1
+        test_max_num_sents = len(test_toksents) + 1
+    else:
+        train_max_num_sents = test_max_num_sents = max_num_sents
+
+    train_data = []
+    for sent in train_toksents[:train_max_num_sents]:
+        train_data.extend(slide_window(sent, n_grams+1))
+    test_data = []
+    for sent in test_toksents[:test_max_num_sents]:
+        test_data.extend(slide_window(sent, n_grams+1))
+
+    x, y = split_toksents(train_data)
+    print("Total number of training samples: ", x.shape[0])
+    x_test, y_test = split_toksents(test_data)
+    print("Total number of testing samples: ", x_test.shape[0])
+
+    return vocab, x, y, x_test, y_test
