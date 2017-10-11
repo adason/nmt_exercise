@@ -1,4 +1,4 @@
-""" Implement Log-linear Model in Chapter 4.
+""" Implement Log-linear Language Model.
 """
 import numpy as np
 from sklearn.metrics import accuracy_score
@@ -8,14 +8,25 @@ from utils.data import build_vocab, tokenize, read_text_sents, slide_window, spl
 from utils.trans import binarize, softmax
 
 
-def log_loss(y, p, eps=1e-15):
-    """ Compute the log loss (cross entropy loss).
+def neg_log_loss(y, p, eps=1e-15):
+    """ Compute the negative log loss (cross entropy loss).
 
-        y: multi-class labels (not one-hot encodings)
-        p: softmax transformed predictions.
-        N: number of samples
-        K: number of labels
-        loss = \sum_{i=0}^{N-1}\sum_{k=0}^{K-1} y_ik * log (p_ik)
+    Note
+    ----
+        Formula: loss = \sum_{i=0}^{N-1}\sum_{k=0}^{K-1} y_ik * log (p_ik)
+
+    Parameters
+    ----------
+    y : numpy array of shape (n_samples,)
+        Multi-class labels (not one-hot encodings)
+    p : numpy array of shape (n_samples, n_labels)
+        Softmax transformed predictions.
+
+    Returns
+    -------
+    np.float64
+        Total sum of negative log losses for all samples.
+
     """
     n_vocab = p.shape[1]
     y = binarize(y, n_vocab)
@@ -28,14 +39,28 @@ def log_loss(y, p, eps=1e-15):
 
 class LogLinearModel:
     """ Log Linear Model.
+
+    Parameters
+    ----------
+    n_grams : int
+        Number of previous words in this language model.
+    n_vocab : int
+        Number of words in the whole vocabulary.
+    random_state : int, optional
+        Integer used to assign initial random seed.
+
+    Attributes
+    ----------
+    n_grams : int
+        Number of previous words in this language model.
+    n_vocab : int
+        Number of words in the whole vocabulary.
+    w : numpy array of shape (n_grams, n_vocab, n_vocab)
+        The weights for this n_grams language model, initialized randomly.
+    b : numpy array of shape (n_vocab,)
+        The biases term, initialized randomly.
     """
     def __init__(self, n_grams, n_vocab, random_state=None):
-        """ Initialize parameters.
-
-            :n_grams:
-            :n_vocab:
-            :random_state:
-        """
         if random_state:
             np.random.seed(random_state)
 
@@ -50,6 +75,22 @@ class LogLinearModel:
 
     def fit(self, x, y, epochs=10, batch_size=32):
         """ Fit the parameters.
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+        y : numpy array of shape (n_samples,)
+            Outcomes
+        epochs : int
+            Maximum number of epochc for the SGD algorithm before convergence.
+        batch_size : int
+            Number of samples in each mini-batch SGD.
+
+        Returns
+        -------
+        list
+            History of loss computed at the end of each epoch.
         """
         loss_history = [np.Inf]
         for e in range(epochs):
@@ -65,6 +106,16 @@ class LogLinearModel:
 
     def predict(self, x):
         """ Predict using the highest probability.
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+
+        Returns
+        -------
+        numpy array of shape (n_samples,)
+            The predicted index for each sample using the largest probability.
         """
         p = self.predict_proba(x)
 
@@ -72,14 +123,45 @@ class LogLinearModel:
 
     def predict_proba(self, x):
         """ Predict the probability.
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+
+        Returns
+        -------
+        numpy array of shape (n_samples, n_vocab)
+            Softmax transformed probability predictions.
         """
-        s = self.linear_trans(x, self.w, self.b)
+        s = self._linear_trans(x, self.w, self.b)
         p = softmax(s, axis=1)
 
         return p
 
     def _fit_one_epoch(self, x, y, batch_size, eta=0.1):
-        """ Fit one epoch.
+        """ Fit one epoch using minibatch SGD.
+
+        Note
+        ----
+            This method implemented minibatch SGD without momentum. It shuffles the training sample
+            to create different minibatches at different epoch.
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+        y : numpy array of shape (n_samples,)
+            Outcomes
+        batch_size : int
+            Number of samples in each mini-batch SGD.
+        eta : float
+            Learning rate.
+
+        Returns
+        -------
+        np.float64
+            Total loss after one epoch training.
         """
         y_onehot = binarize(y, self.n_vocab)
 
@@ -90,24 +172,35 @@ class LogLinearModel:
             x_bat = np.take(x, batch_idx, axis=0)
             y_bat = np.take(y, batch_idx, axis=0)
             y_onehot_bat = np.take(y_onehot, batch_idx, axis=0)
-            p = softmax(self.linear_trans(x_bat, self.w, self.b), axis=1)
+            p = softmax(self._linear_trans(x_bat, self.w, self.b), axis=1)
             p_m_onehot_et = p - y_onehot_bat
             self.b -= eta * np.mean(p_m_onehot_et, axis=0)
             self.w -= eta * self._grad_w(x_bat, p_m_onehot_et)
 
-            loss_bat = self.total_loss(x_bat, y_bat, self.w, self.b)
+            loss_bat = self._total_loss(x_bat, y_bat, self.w, self.b)
             losses.append(loss_bat)
 
         return np.sum(losses)
 
     @staticmethod
     def _grad_w(x_bat, p_m_onehot_et):
-        """ Compute the gradient of w within a minibatch.
+        """ Compute the gradient of weithgs w within a minibatch.
 
-            x_bat: shape (n_samples, n_grams)
-            p_m_onehot_et: shape (n_samples, n_vocab)
+        Note
+        ----
+            Formula: d(loss)/d(w_j) = x_j(p - onehot(e_t))
 
-            dloss/dw_j = x_j(p - onehot(e_t))
+        Parameters
+        ----------
+        x_bat : numpy array of shape (n_samples, n_grams)
+            Featrues within a minibatch
+        p_m_onehot_et : numpy array of shape (n_samples, n_vocab)
+            Numerical value of P - onthot(e_t)
+
+        Returns
+        -------
+        numpy array of shape (n_grams, n_vocab, n_vocab)
+            Minibatch averaged gradient of weights w.
         """
         n_samples = x_bat.shape[0]
         n_grams = x_bat.shape[1]
@@ -122,13 +215,26 @@ class LogLinearModel:
 
 
     @staticmethod
-    def linear_trans(x, w, b):
+    def _linear_trans(x, w, b):
         """ Compute the linear transformation.
 
-            x: token indicies; numpy array of shape (n_samples, n_grams)
-            w: weight matrix; numpy array of shape (n_grams, n_vocab, n_vocab)
-            b: bias; numpy array of shape (n_vocab,)
+        Note
+        ----
             Formula: s_j = \sum_{j; x_j != 0} w_{.,j} * x_j + b_j
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+        w : numpy array of shape (n_grams, n_vocab, n_vocab)
+            Weights
+        b : numpy array of shape (n_vocab,)
+            Biases
+
+        Returns
+        -------
+        numpy array of shape (n_samples, n_vocab)
+            The linear transformation of wx+b.
         """
         b = np.expand_dims(b, axis=0)
         wx = []
@@ -143,16 +249,34 @@ class LogLinearModel:
         return wx + b
 
     @staticmethod
-    def total_loss(x, y, w, b):
+    def _total_loss(x, y, w, b):
         """ Compute the total loss.
+
+        Parameters
+        ----------
+        x : numpy array of shape (n_samples, n_grams)
+            Features
+        y : numpy array of shape (n_samples,)
+            Outcomes
+        w : numpy array of shape (n_grams, n_vocab, n_vocab)
+            Weights
+        b : numpy array of shape (n_vocab,)
+            Biases
+
+        Returns
+        -------
+        np.float64
+            Total negative log loss.
         """
-        s = LogLinearModel.linear_trans(x, w, b)
+        s = LogLinearModel._linear_trans(x, w, b)
         p = softmax(s, axis=1)
 
-        return log_loss(y, p)
+        return neg_log_loss(y, p)
 
 
 def main():
+    """ Main
+    """
     # Some limiting Parameters
     n_grams = 2
     max_num_sents = 1000

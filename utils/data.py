@@ -129,14 +129,14 @@ def split_toksents(toksents):
 
     Parameters
     ----------
-    toksents : list of list or 2D numpy array of shape (n_samples, n_grams)
+    toksents : list of list or 2D numpy array of shape (n_samples, n_grams + 1)
         The whole tokenized dataset.
     Returns
     -------
-    x : 2D numpy array of shape (n_samples, n_grams - 1)
-        x features
-    y : 1D numpy array of shape (n_samples,)
-        y outcomes
+    x : numpy array of shape (n_samples, n_grams)
+        Features
+    y : numpy array of shape (n_samples,)
+        Outcomes
     """
     arr = np.array(toksents)
     x = arr[:, :-1]
