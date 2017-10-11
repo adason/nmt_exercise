@@ -1,103 +1,11 @@
 """ Implement Log-linear Model in Chapter 4.
 """
-import collections
-
 import numpy as np
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 
-
-MAX_NUM_VOCAB = 4000
-
-
-def build_vocab(data_file):
-    """ Build a vocabulary from the corpus.
-    """
-    counter = collections.Counter(read_text_words(data_file))
-    ordered_pairs = sorted(counter.items(), key=lambda x: (x[1], x[0]), reverse=True)
-    if len(ordered_pairs) > MAX_NUM_VOCAB:
-        ordered_pairs = ordered_pairs[:MAX_NUM_VOCAB]
-
-    words = [word for word, _ in ordered_pairs]
-
-    return dict(zip(words, range(len(words))))
-
-
-def read_text_words(data_file):
-    """ Read text file and iterate through all words.
-    """
-    for line in read_text_sents(data_file):
-        for word in line.split():
-            yield word
-
-
-def read_text_sents(data_file):
-    """ Read text file and iterate through all sentences.
-    """
-    with open(data_file, "r") as fin:
-        for line in fin.readlines():
-            yield line
-
-
-def tokenize(sent, vocab):
-    """ Convert a sentence to a list of ids.
-    """
-    unk_index = len(vocab.keys())
-    tokens = [vocab.get(word, unk_index) for word in sent.split()]
-
-    return tokens
-
-
-def slide_window(arr, n):
-    """ Return an iterator of size n sliding window.
-    """
-    for i in range(len(arr)-n+1):
-        yield arr[i:i+n]
-
-
-def split_toksents(toksents):
-    """ Split the tokens within a widow into (x, y) pairs.
-        e_t => y
-        e^{t-1}_{t-n+1} => x
-        x = [\phi(e_{t-n+1});\phi(e_{t-n+2});...;\phi(e_{t-2});\phi(e_{t-1})]
-
-        Note that this method does not convert (x, y) into one-hot encodings. It only keeps
-        the index of non-zero elements.
-    """
-    arr = np.array(toksents)
-    x = arr[:, :-1]
-    y = arr[:, -1]
-
-    return x, y
-
-
-def binarize(y, n_vocab):
-    """ Convert multi-class y labels into one-hot encoded vectors.
-    """
-    y = np.array(y)
-    n_samples = y.shape[0]
-    bin_matrix = np.zeros((n_samples, n_vocab))
-    for i, idx in enumerate(y):
-        bin_matrix[i, idx] = 1
-
-    return bin_matrix
-
-
-def softmax(s, axis=None):
-    """ Compute softmax transformation along the axis.
-
-        p_i = exp(s_i - max(s)) / \sum_i exp(s_i - max(s))
-    """
-    s = np.atleast_2d(s)
-
-    if axis is None:
-        axis = s.ndim - 1
-    s = s - np.expand_dims(np.max(s, axis), axis)
-    s = np.exp(s)
-    s_sum = np.expand_dims(np.sum(s, axis), axis)
-    p = s / s_sum
-
-    return p.squeeze()
+from utils.data import build_vocab, tokenize, read_text_sents, slide_window, split_toksents
+from utils.trans import binarize, softmax
 
 
 def log_loss(y, p, eps=1e-15):
@@ -245,18 +153,20 @@ class LogLinearModel:
 
 
 def main():
+    # Some limiting Parameters
+    n_grams = 2
+    max_num_sents = 1000
+    max_num_voacb = 4000
+
     prefix = "data/iwslt/en-de/"
     train_file = prefix + "train.en-de.tok.filt.en"
     test_file = prefix + "test.en-de.tok.en"
 
-    vocab = build_vocab(train_file)
+    vocab = build_vocab(train_file, max_num_voacb)
     n_vocab = len(vocab.keys()) + 1 # The extra space reserved for unknown word.
     train_toksents = [tokenize(sent, vocab) for sent in read_text_sents(train_file)]
     test_toksents = [tokenize(sent, vocab) for sent in read_text_sents(test_file)]
 
-    # Some limiting Parameters
-    n_grams = 2
-    max_num_sents = 1000
     train_data = []
     for sent in train_toksents[:max_num_sents]:
         train_data.extend(slide_window(sent, n_grams+1))

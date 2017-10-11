@@ -46,6 +46,8 @@ Thumbs.db
 ######################
 # pyenv
 .python-version
+# python cache
+*__pycache__
 
 # For this Project   #
 ######################
