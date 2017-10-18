@@ -44,7 +44,7 @@ def main():
     y = Variable(torch.Tensor(y))
 
     hidden_size = 20
-    n_epochs = 20
+    n_epochs = 100
 
     model = OneLayerMLP(2, hidden_size)
     criterion = torch.nn.MSELoss()
@@ -62,6 +62,8 @@ def main():
         loss.backward()
         optimizer.step()
 
+    y_pred = model(x)
+    print("True Value: ", y, "Prediction Value: ", y_pred)
 
 if __name__ == "__main__":
     main()
