@@ -24,12 +24,15 @@ class FeedForwardModel:
     n_vocab : int
         Number of words in the whole vocabulary.
     """
-    def __init__(self):
+    def __init__(self, n_grams, n_vocab):
         if random_state:
             np.random.seed(random_state)
 
         self.n_grams = n_grams
         self.n_vocab = n_vocab
+
+    def forward(self, x):
+        pass
 
 
 def main():

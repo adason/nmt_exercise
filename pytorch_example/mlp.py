@@ -24,7 +24,6 @@ class OneLayerMLP(torch.nn.Module):
         self.l1_weight = Parameter(torch.randn(1, hidden_size))
         self.l1_bias = Parameter(torch.randn(1))
 
-
     def forward(self, x):
         h = torch.tanh(torch.addmm(self.l0_bias, x, self.l0_weight.t()))
         y_pred = torch.addmm(self.l1_bias, h, self.l1_weight.t())
