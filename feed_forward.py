@@ -10,6 +10,10 @@ from tqdm import tqdm
 from utils.data import prepare_data
 
 
+# dtype = torch.FloatTensor
+dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
+
+
 class FeedForwardModel(torch.nn.Module):
     """ Feed Forward Neural Network Language Model
 
@@ -111,8 +115,10 @@ def main():
     embedding_dim = 100
     hidden_dim = 100
 
-    max_num_sents = 1000
-    max_num_voacb = 4000
+    # max_num_sents = 1000
+    # max_num_voacb = 4000
+    max_num_sents = None
+    max_num_voacb = None
 
     vocab, x, y, x_test, y_test = prepare_data(
         n_grams, max_num_sents, max_num_voacb)
@@ -123,7 +129,7 @@ def main():
 
     model = FeedForwardModel(n_grams, n_vocab, embedding_dim, hidden_dim)
     embed_weight = torch.randn(n_vocab, embedding_dim)  # Change this to read from real embedding
-    model.set_embedding(embed_weight)
+    model.set_embedding(embed_weight, True)
 
     criterion = torch.nn.CrossEntropyLoss()
     parameters = [param for param in model.parameters() if param.requires_grad]
