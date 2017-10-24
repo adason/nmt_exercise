@@ -10,10 +10,6 @@ from tqdm import tqdm
 from utils.data import prepare_data
 
 
-# dtype = torch.FloatTensor
-dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
-
-
 class FeedForwardModel(torch.nn.Module):
     """ Feed Forward Neural Network Language Model
 
@@ -83,12 +79,15 @@ class FeedForwardModel(torch.nn.Module):
         self.embedding_layer.weight = embed_weight
 
 
-def train(train_loader, model, criterion, optimizer):
+def train(train_loader, model, criterion, optimizer, use_cuda=False):
     """ Train one epoch.
     """
     total_loss = 0.0
 
     for x_bat, y_bat in tqdm(train_loader):
+        if use_cuda:
+            x_bat = x_bat.cuda()
+            y_bat = y_bat.cuda()
         x_var = torch.autograd.Variable(x_bat)
         y_var = torch.autograd.Variable(y_bat)
 
@@ -107,13 +106,15 @@ def train(train_loader, model, criterion, optimizer):
 def main():
     """ Main
     """
+    use_cuda = False
+
     # Some limiting Parameters
     n_epochs = 10
-    batch_size = 32
+    batch_size = 256
 
-    n_grams = 2
-    embedding_dim = 100
-    hidden_dim = 100
+    n_grams = 3
+    embedding_dim = 300
+    hidden_dim = 200
 
     # max_num_sents = 1000
     # max_num_voacb = 4000
@@ -129,17 +130,20 @@ def main():
 
     model = FeedForwardModel(n_grams, n_vocab, embedding_dim, hidden_dim)
     embed_weight = torch.randn(n_vocab, embedding_dim)  # Change this to read from real embedding
-    model.set_embedding(embed_weight, True)
+    if use_cuda:
+        model.cuda()
+        embed_weight.cuda()
+    # model.set_embedding(embed_weight)
 
     criterion = torch.nn.CrossEntropyLoss()
     parameters = [param for param in model.parameters() if param.requires_grad]
     optimizer = torch.optim.Adam(parameters, lr=0.01)
 
     train_dataset = dutils.TensorDataset(x, y)
-    train_loader = dutils.DataLoader(train_dataset, batch_size)
+    train_loader = dutils.DataLoader(train_dataset, batch_size, shuffle=True)
 
     for epoch in range(n_epochs):
-        loss = train(train_loader, model, criterion, optimizer)
+        loss = train(train_loader, model, criterion, optimizer, use_cuda)
 
         print(epoch, loss)
 
