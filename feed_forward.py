@@ -53,7 +53,7 @@ class FeedForwardModel(torch.nn.Module):
         self.l1_linear = torch.nn.Linear(hidden_dim, n_vocab)
 
     def forward(self, x):
-        """
+        """ Forward computation.
         """
         embed = self.embedding_layer(x)
         # reshape to (n_samples, n_grams * embedding_dim)
@@ -130,9 +130,11 @@ def main():
     embed_weight = np.vstack([embed_weight, np.random.randn(embedding_dim)])
 
     # Convert to torch tensor
+    # Note that pytorch preferred to use float32 for numeric values and int64(LongIng) for index
+    # So for the pre-trained embedding weight, we will need to explicitly convert into float
     x = torch.from_numpy(x)
     y = torch.from_numpy(y)
-    embed_weight = torch.from_numpy(embed_weight)
+    embed_weight = torch.from_numpy(embed_weight).float()
 
     model = FeedForwardModel(n_grams, n_vocab, embedding_dim, hidden_dim)
     model.set_embedding(embed_weight)

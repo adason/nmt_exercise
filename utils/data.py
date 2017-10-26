@@ -1,6 +1,8 @@
 """ Common Data Loading methods for Languag Models.
 """
 import collections
+import os
+import pickle
 import sys
 
 import numpy as np
@@ -149,18 +151,13 @@ def split_toksents(toksents):
     return x, y
 
 
-def get_embedding(vocab):
+def read_embedding():
     """ Read Pre-trained fasttext embedding.
-
-    Parameters
-    ----------
-    vocab : dict
-        Dictionary of the vocabulary.
 
     Returns
     -------
-    numpy array of shape (n_words, embedding_dim)
-        vector embeddings
+    dict :
+        vector embeddings for all words in vocabulary
     """
     prefix = "data/fasttext/"
     embedding_filename = prefix + "wiki-news-300d-1M.vec"
@@ -172,6 +169,24 @@ def get_embedding(vocab):
             line_data = line.split()
             token, vec = line_data[0], line_data[1:]
             all_embedding[token] = np.array(vec).astype(np.float32)
+
+    return all_embedding
+
+
+def get_embedding(vocab):
+    """ Convert vocabulary into embedding.
+
+    Parameters
+    ----------
+    vocab : dict
+        Dictionary of the vocabulary.
+
+    Returns
+    -------
+    numpy array of shape (n_words, embedding_dim)
+        vector embeddings
+    """
+    all_embedding = read_embedding()
 
     n_words = len(vocab.keys())
     embedding_dim = 300
