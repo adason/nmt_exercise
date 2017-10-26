@@ -7,7 +7,7 @@ import torch.nn.functional as func
 import torch.utils.data as dutils
 from tqdm import tqdm
 
-from utils.data import prepare_data
+from utils.data import prepare_data, get_embedding
 
 
 class FeedForwardModel(torch.nn.Module):
@@ -113,7 +113,7 @@ def main():
     batch_size = 256
 
     n_grams = 3
-    embedding_dim = 300
+    embedding_dim = 300  # This is hard coded according to the pre-trained data
     hidden_dim = 200
 
     # max_num_sents = 1000
@@ -123,17 +123,21 @@ def main():
 
     vocab, x, y, x_test, y_test = prepare_data(
         n_grams, max_num_sents, max_num_voacb)
-    x = torch.from_numpy(x)
-    y = torch.from_numpy(y)
+    embed_weight = get_embedding(vocab)
+
     # The vocabulary size uses extra space reserved for unknown word.
     n_vocab = len(vocab.keys()) + 1
+    embed_weight = np.vstack([embed_weight, np.random.randn(embedding_dim)])
+
+    # Convert to torch tensor
+    x = torch.from_numpy(x)
+    y = torch.from_numpy(y)
+    embed_weight = torch.from_numpy(embed_weight)
 
     model = FeedForwardModel(n_grams, n_vocab, embedding_dim, hidden_dim)
-    embed_weight = torch.randn(n_vocab, embedding_dim)  # Change this to read from real embedding
+    model.set_embedding(embed_weight)
     if use_cuda:
         model.cuda()
-        embed_weight.cuda()
-    # model.set_embedding(embed_weight)
 
     criterion = torch.nn.CrossEntropyLoss()
     parameters = [param for param in model.parameters() if param.requires_grad]

@@ -149,6 +149,40 @@ def split_toksents(toksents):
     return x, y
 
 
+def get_embedding(vocab):
+    """ Read Pre-trained fasttext embedding.
+
+    Parameters
+    ----------
+    vocab : dict
+        Dictionary of the vocabulary.
+
+    Returns
+    -------
+    numpy array of shape (n_words, embedding_dim)
+        vector embeddings
+    """
+    prefix = "data/fasttext/"
+    embedding_filename = prefix + "wiki-news-300d-1M.vec"
+
+    all_embedding = {}
+    with open(embedding_filename, "r") as fin:
+        fin.readline()
+        for line in fin.readlines():
+            line_data = line.split()
+            token, vec = line_data[0], line_data[1:]
+            all_embedding[token] = np.array(vec).astype(np.float32)
+
+    n_words = len(vocab.keys())
+    embedding_dim = 300
+    embedding = np.zeros((n_words, embedding_dim))
+    for word, token in vocab.items():
+        embedding[token] = all_embedding.get(
+            word, np.random.randn(embedding_dim))
+
+    return embedding
+
+
 def prepare_data(n_grams, max_num_sents=None, max_num_voacb=None):
     """ Prepare trainig & testing data for language models.
 
@@ -179,6 +213,7 @@ def prepare_data(n_grams, max_num_sents=None, max_num_voacb=None):
     test_file = prefix + "test.en-de.tok.en"
 
     vocab = build_vocab(train_file, max_num_voacb)
+
     train_toksents = [tokenize(sent, vocab) for sent in read_text_sents(train_file)]
     test_toksents = [tokenize(sent, vocab) for sent in read_text_sents(test_file)]
 
