@@ -1,7 +1,6 @@
 """ Feed Forward Language Model.
 """
 import numpy as np
-# from sklearn.metrics import accuracy_score
 import torch
 import torch.nn.functional as func
 import torch.utils.data as dutils
@@ -88,12 +87,12 @@ def train(train_loader, model, criterion, optimizer, use_cuda=False):
         if use_cuda:
             x_bat = x_bat.cuda()
             y_bat = y_bat.cuda()
-        x_var = torch.autograd.Variable(x_bat)
-        y_var = torch.autograd.Variable(y_bat)
+        x_bat = torch.autograd.Variable(x_bat)
+        y_bat = torch.autograd.Variable(y_bat)
 
-        y_pred = model(x_var)
+        y_pred = model(x_bat)
 
-        loss = criterion(y_pred, y_var)
+        loss = criterion(y_pred, y_bat)
         total_loss += loss.data[0] / x_bat.size(0)
 
         optimizer.zero_grad()
@@ -101,6 +100,16 @@ def train(train_loader, model, criterion, optimizer, use_cuda=False):
         optimizer.step()
 
     return total_loss
+
+
+def accuracy(y_pred, labels):
+    """ Compute the accuracy of predictions using the most probable one.
+    """
+    y_pred, labels = y_pred.data, labels.data  # Get back the torch Tensor
+    _, predicted = torch.max(y_pred, 1)
+    total = len(labels)
+    correct = (predicted == labels).sum()
+    return 100 * correct / total
 
 
 def main():
@@ -124,6 +133,7 @@ def main():
     vocab, x, y, x_test, y_test = prepare_data(
         n_grams, max_num_sents, max_num_voacb)
     embed_weight = get_embedding(vocab)
+    # embed_weight = np.random.randn(len(vocab.keys()), embedding_dim)  # random embedding
 
     # The vocabulary size uses extra space reserved for unknown word.
     n_vocab = len(vocab.keys()) + 1
@@ -134,6 +144,8 @@ def main():
     # So for the pre-trained embedding weight, we will need to explicitly convert into float
     x = torch.from_numpy(x)
     y = torch.from_numpy(y)
+    x_test = torch.from_numpy(x_test)
+    y_test = torch.from_numpy(y_test)
     embed_weight = torch.from_numpy(embed_weight).float()
 
     model = FeedForwardModel(n_grams, n_vocab, embedding_dim, hidden_dim)
@@ -148,13 +160,18 @@ def main():
     train_dataset = dutils.TensorDataset(x, y)
     train_loader = dutils.DataLoader(train_dataset, batch_size, shuffle=True)
 
+    x_test = torch.autograd.Variable(x_test)
+    y_test = torch.autograd.Variable(y_test)
     for epoch in range(n_epochs):
+        print("Training Epoch: ", epoch)
         loss = train(train_loader, model, criterion, optimizer, use_cuda)
 
-        print(epoch, loss)
+        print("Train Loss: ", loss)
+        y_test_pred = model(x_test)
+        test_loss = criterion(y_test_pred, y_test)
+        print("Test Loss: ", test_loss.data[0])
 
-    # y_pred = model.predict(x_test)
-    # print(accuracy_score(y_test, y_pred))
+    print("Accuracy: ", accuracy(y_test_pred, y_test))
 
 
 if __name__ == "__main__":
