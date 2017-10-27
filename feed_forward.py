@@ -78,10 +78,11 @@ class FeedForwardModel(torch.nn.Module):
         self.embedding_layer.weight = embed_weight
 
 
-def train(train_loader, model, criterion, optimizer, use_cuda=False):
+def train(train_loader, model, criterion, optimizer, use_cuda):
     """ Train one epoch.
     """
     total_loss = 0.0
+    n_sample = 0
 
     for x_bat, y_bat in tqdm(train_loader):
         if use_cuda:
@@ -90,38 +91,60 @@ def train(train_loader, model, criterion, optimizer, use_cuda=False):
         x_bat = torch.autograd.Variable(x_bat)
         y_bat = torch.autograd.Variable(y_bat)
 
-        y_pred = model(x_bat)
+        y_pred_bat = model(x_bat)
 
-        loss = criterion(y_pred, y_bat)
-        total_loss += loss.data[0] / x_bat.size(0)
+        loss = criterion(y_pred_bat, y_bat)
+        total_loss += loss.data[0]
+        n_sample += x_bat.size(0)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-    return total_loss
+    loss = total_loss / n_sample
+
+    return loss
 
 
-def accuracy(y_pred, labels):
-    """ Compute the accuracy of predictions using the most probable one.
+def validate(val_loader, model, criterion, use_cuda):
+    """ Validate Test Data
     """
-    y_pred, labels = y_pred.data, labels.data  # Get back the torch Tensor
-    _, predicted = torch.max(y_pred, 1)
-    total = len(labels)
-    correct = (predicted == labels).sum()
-    return 100 * correct / total
+    total_loss = 0.0
+    n_correct = 0
+    n_sample = 0
+
+    for x_bat, y_bat in tqdm(val_loader):
+        if use_cuda:
+            x_bat = x_bat.cuda()
+            y_bat = y_bat.cuda()
+        x_bat = torch.autograd.Variable(x_bat)
+        y_bat = torch.autograd.Variable(y_bat)
+
+        y_pred_bat = model(x_bat)
+
+        loss = criterion(y_pred_bat, y_bat)
+        total_loss += loss.data[0]
+        n_sample += x_bat.size(0)
+
+        _, predicted = torch.max(y_pred_bat.data, 1)
+        n_correct += (predicted == y_bat.data).sum()
+
+    accuracy = 100.0 * n_correct / n_sample
+    loss = total_loss / n_sample
+
+    return loss, accuracy
 
 
 def main():
     """ Main
     """
-    use_cuda = False
+    use_cuda = True
 
     # Some limiting Parameters
     n_epochs = 10
     batch_size = 256
 
-    n_grams = 3
+    n_grams = 5
     embedding_dim = 300  # This is hard coded according to the pre-trained data
     hidden_dim = 200
 
@@ -153,25 +176,23 @@ def main():
     if use_cuda:
         model.cuda()
 
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(size_average=False)
     parameters = [param for param in model.parameters() if param.requires_grad]
-    optimizer = torch.optim.Adam(parameters, lr=0.01)
+    optimizer = torch.optim.Adam(parameters, lr=1e-3)
 
     train_dataset = dutils.TensorDataset(x, y)
     train_loader = dutils.DataLoader(train_dataset, batch_size, shuffle=True)
+    test_dataset = dutils.TensorDataset(x_test, y_test)
+    test_loader = dutils.DataLoader(test_dataset, batch_size)
 
-    x_test = torch.autograd.Variable(x_test)
-    y_test = torch.autograd.Variable(y_test)
     for epoch in range(n_epochs):
         print("Training Epoch: ", epoch)
+
         loss = train(train_loader, model, criterion, optimizer, use_cuda)
-
         print("Train Loss: ", loss)
-        y_test_pred = model(x_test)
-        test_loss = criterion(y_test_pred, y_test)
-        print("Test Loss: ", test_loss.data[0])
 
-    print("Accuracy: ", accuracy(y_test_pred, y_test))
+        test_loss, accuracy = validate(test_loader, model, criterion, use_cuda)
+        print("Test Loss: ", test_loss, "Test Accuracy: ", accuracy)
 
 
 if __name__ == "__main__":
