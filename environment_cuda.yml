@@ -1,7 +1,7 @@
 # Environment with CUDA 8.0 Support
 name: nmt
 channels:
-- soumith
+- pytorch
 dependencies:
 - python=3.6
 - anaconda=5.0.1
@@ -12,6 +12,6 @@ dependencies:
 - pip:
     - torchtext==0.2.0
 # From soumith channel
-- pytorch=0.2.0
-- torchvision=0.1.9
-- magma-cuda80=2.1.0
+- pytorch=0.3.0
+- torchvision=0.2.0
+- magma-cuda90=2.2.0

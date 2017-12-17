@@ -1,6 +1,6 @@
 name: nmt
 channels:
-- soumith
+- pytorch
 dependencies:
 - python=3.6
 - anaconda=5.0.1
@@ -11,5 +11,5 @@ dependencies:
 - pip:
     - torchtext==0.2.0
 # From soumith channel
-- pytorch=0.2.0
-- torchvision=0.1.9
+- pytorch=0.3.0
+- torchvision=0.2.0
