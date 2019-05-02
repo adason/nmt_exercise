@@ -1,14 +1,12 @@
 name: nmt
 channels:
-- pytorch
+    - pytorch
 dependencies:
-- python=3.6
-- plotly=2.2.2
-- pylint=1.8.2
-- spacy=2.0.5
-- tqdm=4.19.4
-- pip:
-    - torchtext==0.2.3
-# From pytorch channel
-- pytorch=0.4.0
-- torchvision=0.2.0
+    - python=3.7
+    - plotly=3.7.0
+    - pylint=2.3.1
+    - spacy=2.0.16
+    - tqdm=4.31.1
+    # from pytorch channel
+    - pytorch=1.1.0
+    - torchvision=0.2.2
