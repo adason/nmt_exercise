@@ -94,7 +94,7 @@ def train(train_loader, model, criterion, optimizer, use_cuda):
         y_pred_bat = model(x_bat)
 
         loss = criterion(y_pred_bat, y_bat)
-        total_loss += loss.data[0]
+        total_loss += loss.data.item()
         n_sample += x_bat.size(0)
 
         optimizer.zero_grad()
@@ -123,7 +123,7 @@ def validate(val_loader, model, criterion, use_cuda):
         y_pred_bat = model(x_bat)
 
         loss = criterion(y_pred_bat, y_bat)
-        total_loss += loss.data[0]
+        total_loss += loss.data.item()
         n_sample += x_bat.size(0)
 
         _, predicted = torch.max(y_pred_bat.data, 1)
@@ -138,7 +138,7 @@ def validate(val_loader, model, criterion, use_cuda):
 def main():
     """ Main
     """
-    use_cuda = True
+    use_cuda = torch.cuda.is_available()
 
     # Some limiting Parameters
     n_epochs = 10
